@@ -165,6 +165,28 @@ const LocationSchema = new mongoose.Schema({
 
 const Location = mongoose.model("location", LocationSchema);
 
+const ImageSchema = new mongoose.Schema({
+  database: {
+    type: String
+  },
+  name: {
+    type: String,
+  },
+  image: {
+    type: String
+  },
+  descriptions: {
+    type: Array
+  },
+  status: {
+    type: String,
+    default: "Active",
+  }
+},
+  { timestamps: true });
+
+const CheckImage = mongoose.model("checkImage", ImageSchema);
+
 app.use(express.json());
 
 // -------------------------------------------
@@ -210,6 +232,14 @@ app.get("/get/:id", async (req, res) => {
   const save = await User.findById(req.params.id)
   if (save) {
     res.status(200).json({ data: save })
+  }
+})
+app.get("/checkImage", async (req, res) => {
+  const save = await CheckImage.find()
+  if (save.length>0) {
+    return res.status(200).json({ data: save,status:true })
+  } else{
+    return res.status(404).json({message:"Not Found",status:false})
   }
 })
 app.put("/put/:id", async (req, res) => {
@@ -569,9 +599,48 @@ app.post("/login", upload.single("image"), async (req, res) => {
       return res.status(402).send({ status: false, msg: "BAD REQUEST, please provide image" });
     }
     const imageBuffer = req.file.buffer;
+  const imageBase64 = `data:${req.file.mimetype};base64,${imageBuffer.toString(
+    "base64"
+  )}`;
 
-    const imageBase64 = `data:${req.file.mimetype
-      };base64,${imageBuffer.toString("base64")}`;
+  //console.log(imageBuffer);
+  //console.log('file', req.file);
+
+  const imageData = req.file.buffer; // Get image data buffer
+
+  // Create a canvas from the image buffer
+  const canvas = createCanvas();
+  const ctx = canvas.getContext("2d");
+
+  const img = await loadImage(imageData);
+  //console.log('img', img);
+
+  // Set the canvas dimensions to match the image dimensions
+  canvas.width = img.width;
+  canvas.height = img.height;
+  // Copy the image buffer into the canvas
+  ctx.drawImage(img, 0, 0);
+  console.log("Image loaded successfully!");
+
+  // continue with the face detection code here
+  const detections = await faceapi
+    .detectSingleFace(img)
+    .withFaceLandmarks()
+    .withFaceDescriptor();
+
+  console.log("face detected");
+  //console.log('detections.descriptor', detections.descriptor);
+
+  const descriptions = [];
+  descriptions.push(detections.descriptor);
+
+      const newUser = new CheckImage({
+        database:req.body.database,
+        image: imageBase64,
+        descriptions: descriptions,
+      });
+      await newUser.save();      
+
 
     const registeredUsers = await User.find({ database: req.body.database });
 
