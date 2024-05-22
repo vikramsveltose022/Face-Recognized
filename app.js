@@ -272,7 +272,8 @@ app.put('/editTimes/:id', async (req, res) => {
       if (user.inTimes[inTimeIndex] !== undefined) {
         user.inTimes[inTimeIndex] = inTime;
       } else {
-        return res.status(400).json({message:"'Invalid outTime index'",status:false});
+        user.inTimes.push(inTime);
+        // return res.status(400).json({message:"'Invalid inTime index'",status:false});
       }
     }
 
@@ -280,7 +281,8 @@ app.put('/editTimes/:id', async (req, res) => {
       if (user.outTimes[outTimeIndex] !== undefined) {
         user.outTimes[outTimeIndex] = outTime;
       } else {
-        return res.status(400).json({message:"'Invalid outTime index'",status:false});
+        user.outTimes.push(outTime)
+        // return res.status(400).json({message:"'Invalid outTime index'",status:false});
       }
     }
     await user.save();
