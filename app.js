@@ -172,6 +172,9 @@ const ImageSchema = new mongoose.Schema({
   name: {
     type: String,
   },
+  time:{
+    type:String
+  },
   image: {
     type: String
   },
@@ -236,10 +239,10 @@ app.get("/get/:id", async (req, res) => {
 })
 app.get("/checkImage", async (req, res) => {
   const save = await CheckImage.find()
-  if (save.length>0) {
-    return res.status(200).json({ data: save,status:true })
-  } else{
-    return res.status(404).json({message:"Not Found",status:false})
+  if (save.length > 0) {
+    return res.status(200).json({ data: save, status: true })
+  } else {
+    return res.status(404).json({ message: "Not Found", status: false })
   }
 })
 app.put("/put/:id", async (req, res) => {
@@ -254,8 +257,68 @@ app.put("/put/:id", async (req, res) => {
   return res.status(404).json({ message: "not found", status: false })
 })
 // ----------------------------------------------
+// update checkIn and checkout
+app.put('/editTimes/:id', async (req, res) => {
+  const { id } = req.params;
+  const { inTimeIndex, inTime, outTimeIndex, outTime } = req.body;
+  try {
+    const user = await Attendance.findById(id);
 
+    if (!user) {
+      return res.status(404).json({message:"not found"});
+    }
 
+    if (inTimeIndex !== undefined || inTime !== undefined) {
+      if (user.inTimes[inTimeIndex] !== undefined) {
+        user.inTimes[inTimeIndex] = inTime;
+      } else {
+        return res.status(400).json({message:"'Invalid outTime index'",status:false});
+      }
+    }
+
+    if (outTimeIndex !== undefined || outTime !== undefined) {
+      if (user.outTimes[outTimeIndex] !== undefined) {
+        user.outTimes[outTimeIndex] = outTime;
+      } else {
+        return res.status(400).json({message:"'Invalid outTime index'",status:false});
+      }
+    }
+    await user.save();
+    return res.status(200).json({User:user,message:"updated successfull!",status:true})
+  } catch (err) {
+    console.log(err)
+    return res.status(500).json({error:"Internal Server Error",status:false});
+  }
+});
+
+// check checkIn and checkOut time
+async function checkTimes(data) {
+  const res = await axios.get(`https://customer-node.rupioo.com/holiday/view-working/${data.database}`)
+  if (res.status) {
+    const time = data.time; // Time should be in 12-hour format with AM/PM indicator
+    const fromTime = res.data.WorkingHours.fromTime;;
+    const toTime = res.data.WorkingHours.toTime;;
+    const lateByTime = res.data.WorkingHours.lateByTime;;
+    const shortByTime = res.data.WorkingHours.shortByTime;;
+    const [timePart, amPmPart] = time.split(' ');
+    const [hours, minutes] = timePart.split(':').map(Number);
+    let adjustedHours = hours;
+    if (amPmPart.toLowerCase() === 'pm') {
+      adjustedHours += 12;
+    }
+    const inputTimeObj = new Date(1970, 0, 1, adjustedHours, minutes, 0);
+    const fromTimeObj = new Date(`1970-01-01T${fromTime}:00`);
+    const toTimeObj = new Date(`1970-01-01T${toTime}:00`);
+    const lateByTimeObj = new Date(`1970-01-01T${lateByTime}:00`);
+    const shortByTimeObj = new Date(`1970-01-01T${shortByTime}:00`);
+
+    if ((fromTimeObj <= inputTimeObj && inputTimeObj <= lateByTimeObj) ||
+      (shortByTimeObj >= inputTimeObj && inputTimeObj >= toTimeObj)) {
+      return true;
+    }
+    return false;
+  }
+}
 
 const calculateAttendance = (attendanceData) => {
   const { inTimes, outTimes, date, status } = attendanceData;
@@ -592,6 +655,10 @@ app.post("/register", upload.single("image"), async (req, res) => {
 
 app.post("/login", upload.single("image"), async (req, res) => {
   try {
+    const status = await checkTimes(req.body)
+    if(!status){
+      return res.status(400).json({message:"You are not within office in Time",status:false})
+    }
     // const { latitude, longitude } = req.body;
     // const lati = latitude.toString().slice(0, 7)
     // const long = longitude.toString().slice(0, 7)
@@ -599,47 +666,48 @@ app.post("/login", upload.single("image"), async (req, res) => {
       return res.status(402).send({ status: false, msg: "BAD REQUEST, please provide image" });
     }
     const imageBuffer = req.file.buffer;
-  const imageBase64 = `data:${req.file.mimetype};base64,${imageBuffer.toString(
-    "base64"
-  )}`;
+    const imageBase64 = `data:${req.file.mimetype};base64,${imageBuffer.toString(
+      "base64"
+    )}`;
 
-  //console.log(imageBuffer);
-  //console.log('file', req.file);
+    //console.log(imageBuffer);
+    //console.log('file', req.file);
 
-  const imageData = req.file.buffer; // Get image data buffer
+    const imageData = req.file.buffer; // Get image data buffer
 
-  // Create a canvas from the image buffer
-  const canvas = createCanvas();
-  const ctx = canvas.getContext("2d");
+    // Create a canvas from the image buffer
+    const canvas = createCanvas();
+    const ctx = canvas.getContext("2d");
 
-  const img = await loadImage(imageData);
-  //console.log('img', img);
+    const img = await loadImage(imageData);
+    //console.log('img', img);
 
-  // Set the canvas dimensions to match the image dimensions
-  canvas.width = img.width;
-  canvas.height = img.height;
-  // Copy the image buffer into the canvas
-  ctx.drawImage(img, 0, 0);
-  console.log("Image loaded successfully!");
+    // Set the canvas dimensions to match the image dimensions
+    canvas.width = img.width;
+    canvas.height = img.height;
+    // Copy the image buffer into the canvas
+    ctx.drawImage(img, 0, 0);
+    console.log("Image loaded successfully!");
 
-  // continue with the face detection code here
-  const detections = await faceapi
-    .detectSingleFace(img)
-    .withFaceLandmarks()
-    .withFaceDescriptor();
+    // continue with the face detection code here
+    const detections = await faceapi
+      .detectSingleFace(img)
+      .withFaceLandmarks()
+      .withFaceDescriptor();
 
-  console.log("face detected");
-  //console.log('detections.descriptor', detections.descriptor);
+    console.log("face detected");
+    //console.log('detections.descriptor', detections.descriptor);
 
-  const descriptions = [];
-  descriptions.push(detections.descriptor);
+    const descriptions = [];
+    descriptions.push(detections.descriptor);
 
-      const newUser = new CheckImage({
-        database:req.body.database,
-        image: imageBase64,
-        descriptions: descriptions,
-      });
-      await newUser.save();      
+    const newUser = new CheckImage({
+      database: req.body.database,
+      image: imageBase64,
+      descriptions: descriptions,
+      time:req.body.time
+    });
+    await newUser.save();
 
 
     const registeredUsers = await User.find({ database: req.body.database });
@@ -685,13 +753,13 @@ app.post("/login", upload.single("image"), async (req, res) => {
       if (misMatchPercentage <= 0.5) {
         await attendance(registeredUser, req.body);
         console.log("success");
-        return res.status(200).json({ registeredUser,time:req.body, message: "User logged in successfully!",status:true });
+        return res.status(200).json({ registeredUser, time: req.body, message: "User logged in successfully!", status: true });
       } else {
         console.log("fail");
         // return res.status(404).json("User Not Found!");
       }
     }
-    return res.status(404).json({message:"User Not Found",status:false});
+    return res.status(404).json({ message: "User Not Found", status: false });
   } catch (error) {
     console.error("Error during comparison:", error);
   }
