@@ -172,14 +172,17 @@ const ImageSchema = new mongoose.Schema({
   name: {
     type: String,
   },
-  time:{
-    type:String
+  time: {
+    type: String
   },
   image: {
     type: String
   },
   descriptions: {
     type: Array
+  },
+  date: {
+    type: String
   },
   status: {
     type: String,
@@ -237,8 +240,8 @@ app.get("/get/:id", async (req, res) => {
     res.status(200).json({ data: save })
   }
 })
-app.get("/checkImage", async (req, res) => {
-  const save = await CheckImage.find()
+app.get("/checkImage/:database", async (req, res) => {
+  const save = await CheckImage.find({ database: req.params.database })
   if (save.length > 0) {
     return res.status(200).json({ data: save, status: true })
   } else {
@@ -265,7 +268,7 @@ app.put('/editTimes/:id', async (req, res) => {
     const user = await Attendance.findById(id);
 
     if (!user) {
-      return res.status(404).json({message:"not found"});
+      return res.status(404).json({ message: "not found" });
     }
 
     if (inTimeIndex !== undefined || inTime !== undefined) {
@@ -286,10 +289,10 @@ app.put('/editTimes/:id', async (req, res) => {
       }
     }
     await user.save();
-    return res.status(200).json({User:user,message:"updated successfull!",status:true})
+    return res.status(200).json({ User: user, message: "updated successfull!", status: true })
   } catch (err) {
     console.log(err)
-    return res.status(500).json({error:"Internal Server Error",status:false});
+    return res.status(500).json({ error: "Internal Server Error", status: false });
   }
 });
 
@@ -658,8 +661,8 @@ app.post("/register", upload.single("image"), async (req, res) => {
 app.post("/login", upload.single("image"), async (req, res) => {
   try {
     const status = await checkTimes(req.body)
-    if(!status){
-      return res.status(400).json({message:"You are not within office in Time",status:false})
+    if (!status) {
+      return res.status(400).json({ message: "You are not within office in Time", status: false })
     }
     // const { latitude, longitude } = req.body;
     // const lati = latitude.toString().slice(0, 7)
@@ -707,7 +710,8 @@ app.post("/login", upload.single("image"), async (req, res) => {
       database: req.body.database,
       image: imageBase64,
       descriptions: descriptions,
-      time:req.body.time
+      time: req.body.time,
+      date: req.body.date
     });
     await newUser.save();
 
